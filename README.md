@@ -31,6 +31,8 @@
 
 -----------------
 
+This is a fork from official version https://github.com/shenghanlin/SeismicFoundationModel. 
+
 # 🌟 Seismic Foundation Model (SFM)
 
  As shown in this workflow figure, we test the Seismic Foundation Model's performance in segmentation tasks and regression tasks, specifically in classification (i.e. seismic facies), segmentaion (i.e. seismic geobody), signal processing (i.e. denoising), inversion (i.e. reflectivity estimation), and interpolation.
