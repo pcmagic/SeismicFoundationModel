@@ -14,8 +14,14 @@ Data/Interpolation.zip
 Data/Interpolation/
 Data/Inversion.zip
 Data/Inversion/
+Data/mae_data_more/
+Data/mae_data_more_small/
+*nohup.out
+SFM_Finetune/Application/Facies/
+SFM_Pretrain/output_dir/
 SFM-Finetune/Application/Facies/
 SFM-Pretrain/output_dir/
+output_dir/
 
 # build artifacts
 .eggs/
