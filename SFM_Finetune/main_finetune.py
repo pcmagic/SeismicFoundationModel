@@ -31,19 +31,21 @@ from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 
 import util.lr_decay as lrd
 import util.misc as misc
-from util.datasets import FacesSet,SaltSet,DenoiseSet,ReflectSet,InterpolationSet
+from util.datasets import FacesSet, SaltSet, DenoiseSet, ReflectSet, InterpolationSet
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
 import models_Segmentation
 import models_Regression
 from models_Regression import forward_loss
-from engine_finetune import train_one_epoch, evaluate,evaluateRegression
+from engine_finetune import train_one_epoch, evaluate, evaluateRegression
 from modules.modeling.deeplab import *
 from modules.modeling.Unet_models import *
 
+
 def get_args_parser():
-    parser = argparse.ArgumentParser('MAE fine-tuning for image classification', add_help=False)
+    parser = argparse.ArgumentParser(
+        'MAE fine-tuning for image classification', add_help=False)
     parser.add_argument('--batch_size', default=16, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
     parser.add_argument('--epochs', default=50, type=int)
@@ -181,24 +183,26 @@ def main(args):
     # dataset_train = build_dataset(is_train=True, args=args)
     # dataset_val = build_dataset(is_train=False, args=args)
     if args.task == 'SEAM':
-        dataset_train = FacesSet(args.data_path,is_train=True)
-        dataset_val = FacesSet(args.data_path,is_train=False)
+        dataset_train = FacesSet(args.data_path, is_train=True)
+        dataset_val = FacesSet(args.data_path, is_train=False)
         args.nb_classes = 6
     elif args.task == 'Salt':
-        dataset_train = SaltSet(args.data_path,is_train=True)
-        dataset_val   = SaltSet(args.data_path,is_train=False)
+        dataset_train = SaltSet(args.data_path, is_train=True)
+        dataset_val = SaltSet(args.data_path, is_train=False)
         args.nb_classes = 2
     elif args.task == 'Denoise':
-        dataset_train = DenoiseSet(args.data_path,is_train=True)
-        dataset_val   = DenoiseSet(args.data_path,is_train=False)
+        dataset_train = DenoiseSet(args.data_path, is_train=True)
+        dataset_val = DenoiseSet(args.data_path, is_train=False)
         args.nb_classes = 1
     elif args.task == 'Reflection':
-        dataset_train = ReflectSet(args.data_path,is_train=True)
-        dataset_val   = ReflectSet(args.data_path,is_train=False)
+        dataset_train = ReflectSet(args.data_path, is_train=True)
+        dataset_val = ReflectSet(args.data_path, is_train=False)
         args.nb_classes = 1
     elif args.task == 'Interpolation':
-        dataset_train = InterpolationSet(args.data_path,is_train=True,shape=[args.input_size, args.input_size])
-        dataset_val   = InterpolationSet(args.data_path,is_train=False,shape=[args.input_size, args.input_size])
+        dataset_train = InterpolationSet(args.data_path, is_train=True, shape=[
+                                         args.input_size, args.input_size])
+        dataset_val = InterpolationSet(args.data_path, is_train=False, shape=[
+                                       args.input_size, args.input_size])
         args.nb_classes = 1
 
     # dataset_train = FacesSetF3(args.data_path,is_train=True)
@@ -255,33 +259,33 @@ def main(args):
     #         mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
     #         prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
     #         label_smoothing=args.smoothing, num_classes=args.nb_classes)
-    
 
     if args.modelComparsion == 'Deeplab':
-            model = DeepLab(num_classes=args.nb_classes,
+        model = DeepLab(num_classes=args.nb_classes,
                         backbone='resnet',
                         output_stride=16,
                         sync_bn=True,
-                        freeze_bn=False,Mask=False)
+                        freeze_bn=False, Mask=False)
     elif args.modelComparsion == 'Unet':
-        model = U_Net(in_ch=1, out_ch=args.nb_classes,Interpolation=(args.task=='Interpolation'))
+        model = U_Net(in_ch=1, out_ch=args.nb_classes,
+                      Interpolation=(args.task == 'Interpolation'))
     else:
-        if args.task in ['Denoise','Interpolation','Reflection']:
+        if args.task in ['Denoise', 'Interpolation', 'Reflection']:
             model = models_Regression.__dict__[args.model](
-            img_size=args.input_size,
-            num_classes=args.nb_classes,
-            drop_path_rate=args.drop_path,
-            in_chans=1,
-            Interpolation=(args.task=='Interpolation')
-        )
+                img_size=args.input_size,
+                num_classes=args.nb_classes,
+                drop_path_rate=args.drop_path,
+                in_chans=1,
+                Interpolation=(args.task == 'Interpolation')
+            )
         elif args.task in ['SEAM', 'Salt']:
             model = models_Segmentation.__dict__[args.model](
-            in_chans=1,
-            img_size=args.input_size,
-            num_classes=args.nb_classes,
-            drop_path_rate=args.drop_path,
-        )
-        
+                in_chans=1,
+                img_size=args.input_size,
+                num_classes=args.nb_classes,
+                drop_path_rate=args.drop_path,
+            )
+
     if args.finetune and not args.eval:
         checkpoint = torch.load(args.finetune, map_location='cpu')
 
@@ -315,17 +319,18 @@ def main(args):
         for _, p in model.decoder.named_parameters():
             p.requires_grad = True
         for _, p in model.segmentation_head.named_parameters():
-                p.requires_grad = True
+            p.requires_grad = True
     model.to(device)
 
     model_without_ddp = model
-    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    n_parameters = sum(p.numel()
+                       for p in model.parameters() if p.requires_grad)
 
     print("Model = %s" % str(model_without_ddp))
     print('number of params (M): %.2f' % (n_parameters / 1.e6))
 
     eff_batch_size = args.batch_size * args.accum_iter * misc.get_world_size()
-    
+
     if args.lr is None:  # only base_lr is specified
         args.lr = args.blr * eff_batch_size / 256
 
@@ -334,33 +339,42 @@ def main(args):
 
     print("accumulate grad iterations: %d" % args.accum_iter)
     print("effective batch size: %d" % eff_batch_size)
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total number of trainable parameters: {total_params}")
 
     if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu],find_unused_parameters=True)
+        model = torch.nn.parallel.DistributedDataParallel(
+            # model, device_ids=[args.gpu], find_unused_parameters=True)
+            model, device_ids=[args.gpu], find_unused_parameters=False)
         model_without_ddp = model.module
 
     # build optimizer with layer-wise lr decay (lrd)
     # optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     if args.frozen and args.finetune:
-        optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
+        optimizer = torch.optim.AdamW(
+            filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
     elif args.modelComparsion == 'Deeplab' or args.modelComparsion == 'Unet':
-        optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
+        optimizer = torch.optim.AdamW(
+            filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
     else:
-        optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
-        
+        optimizer = torch.optim.AdamW(
+            filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
+
     loss_scaler = NativeScaler()
 
-    if args.task in ['Denoise','Interpolation','Reflection']:
+    if args.task in ['Denoise', 'Interpolation', 'Reflection']:
         criterion = forward_loss
     elif args.task in ['SEAM', 'Salt']:
         criterion = torch.nn.CrossEntropyLoss()
     print("criterion = %s" % str(criterion))
 
-    misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
+    misc.load_model(args=args, model_without_ddp=model_without_ddp,
+                    optimizer=optimizer, loss_scaler=loss_scaler)
 
     if args.eval:
         test_stats = evaluate(data_loader_val, model, device)
-        print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc']:.1f}%")
+        print(
+            f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc']:.1f}%")
         exit(0)
 
     print(f"Start training for {args.epochs} epochs")
@@ -383,36 +397,43 @@ def main(args):
                 loss_scaler=loss_scaler, epoch=epoch)
         if args.task in ['SEAM', 'Salt']:
             test_stats = evaluate(data_loader_val, model, device)
-            print(f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc']:.1f}%")
+            print(
+                f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc']:.1f}%")
             max_accuracy = max(max_accuracy, test_stats["acc"])
             print(f'Max accuracy: {max_accuracy:.2f}%')
 
             if log_writer is not None:
-                log_writer.add_scalar('perf/test_acc', test_stats['acc'], epoch)
-                log_writer.add_scalar('perf/test_miou', test_stats['miou'], epoch)
-                log_writer.add_scalar('perf/test_loss', test_stats['loss'], epoch)
+                log_writer.add_scalar(
+                    'perf/test_acc', test_stats['acc'], epoch)
+                log_writer.add_scalar(
+                    'perf/test_miou', test_stats['miou'], epoch)
+                log_writer.add_scalar(
+                    'perf/test_loss', test_stats['loss'], epoch)
 
             log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                            **{f'test_{k}': v for k, v in test_stats.items()},
-                            'epoch': epoch,
-                            'n_parameters': n_parameters}
-        elif args.task in ['Denoise','Interpolation','Reflection']:
-            test_stats = evaluateRegression(data_loader_val, model, device,task=args.task)
-            
-            print(f"Loss of the network on the {len(dataset_val)} test images: {test_stats['loss']:.5f}")
+                         **{f'test_{k}': v for k, v in test_stats.items()},
+                         'epoch': epoch,
+                         'n_parameters': n_parameters}
+        elif args.task in ['Denoise', 'Interpolation', 'Reflection']:
+            test_stats = evaluateRegression(
+                data_loader_val, model, device, task=args.task)
+
+            print(
+                f"Loss of the network on the {len(dataset_val)} test images: {test_stats['loss']:.5f}")
             # max_accuracy = max(max_accuracy, test_stats["acc"])
             # print(f'Max accuracy: {max_accuracy:.2f}%')
-            
-            if log_writer is not None:
-                log_writer.add_scalar('perf/test_mse', test_stats['mse'], epoch)
-                log_writer.add_scalar('perf/test_msssim', test_stats['msssim'], epoch)
-                log_writer.add_scalar('perf/test_psnr', test_stats['psnr'], epoch)
-                
-            
-            log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                            'epoch': epoch,
-                            'n_parameters': n_parameters}
 
+            if log_writer is not None:
+                log_writer.add_scalar(
+                    'perf/test_mse', test_stats['mse'], epoch)
+                log_writer.add_scalar('perf/test_msssim',
+                                      test_stats['msssim'], epoch)
+                log_writer.add_scalar(
+                    'perf/test_psnr', test_stats['psnr'], epoch)
+
+            log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
+                         'epoch': epoch,
+                         'n_parameters': n_parameters}
 
         if args.output_dir and misc.is_main_process():
             if log_writer is not None:

@@ -254,9 +254,22 @@ class NativeScalerWithGradNormCount:
 
     def __init__(self):
         self._scaler = torch.cuda.amp.GradScaler()
+        
+    def check_grad_strides(self, parameters):
+        for param in parameters:
+            if param.requires_grad:
+                grad = param.grad
+                if grad is not None:
+                    print()
+                    print(f"Param sizes: {param.size()}, strides: {param.stride()}")
+                    print(f"Grad sizes: {grad.size()}, strides: {grad.stride()}")
+                    print()
 
     def __call__(self, loss, optimizer, clip_grad=None, parameters=None, create_graph=False, update_grad=True):
         self._scaler.scale(loss).backward(create_graph=create_graph)
+        # self.check_grad_strides(parameters)
+        # import sys
+        # sys.exit(0)
         if update_grad:
             if clip_grad is not None:
                 assert parameters is not None
