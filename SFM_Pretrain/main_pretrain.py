@@ -29,6 +29,7 @@ import os
 import time
 from pathlib import Path
 import os
+import torch.nn as nn
 
 # Todo: CUDA_VISIBLE_DEVICES
 os.environ["CUDA_VISIBLE_DEVICES"] = '0,1'
@@ -163,10 +164,18 @@ def main(args):
     print("actual lr: %.2e" % args.lr)
     print("accumulate grad iterations: %d" % args.accum_iter)
     print("effective batch size: %d" % eff_batch_size)
-
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total number of trainable parameters: {format(total_params, ',')}")
+    # # 打印每个模块的名字和参数量
+    # for name, module in model.named_modules():
+    #     if isinstance(module, nn.Module):
+    #         params = sum(p.numel() for p in module.parameters() if p.requires_grad)
+    #         print(f"Module: {name}, Parameters: {format(total_params, ',')}")
+        
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[args.gpu], find_unused_parameters=True)
+            # model, device_ids=[args.gpu], find_unused_parameters=True)
+            model, device_ids=[args.gpu], find_unused_parameters=False)
         model_without_ddp = model.module
 
     # following timm: set wd as 0 for bias and norm layers
