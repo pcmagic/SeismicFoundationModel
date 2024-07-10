@@ -15,7 +15,7 @@ import models_mae
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 import util.misc as misc
 import timm.optim.optim_factory as optim_factory
-from util.datasets import SeismicSet
+from util.datasets import *
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
@@ -122,7 +122,7 @@ def main(args):
     np.random.seed(seed)
 
     cudnn.benchmark = True
-    dataset_train = SeismicSet(args.data_path, args.input_size)
+    dataset_train = SeismicSet_singleFile(args.data_path, args.input_size)
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
