@@ -25,14 +25,13 @@ import argparse
 import datetime
 import json
 import numpy as np
-import os
 import time
 from pathlib import Path
 import os
 import torch.nn as nn
 
 # Todo: CUDA_VISIBLE_DEVICES
-os.environ["CUDA_VISIBLE_DEVICES"] = '0,1'
+# os.environ["CUDA_VISIBLE_DEVICES"] = '0,1'
 # assert timm.__version__ == "0.3.2"  # version check
 
 
