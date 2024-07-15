@@ -15,7 +15,7 @@ Data/Interpolation/
 Data/Inversion.zip
 Data/Inversion/
 *mae_data_more
-Data/mae_data_more_small/
+Data/mae_data_more_small*
 Data/merged*
 *nohup.out
 SFM_Finetune/Application/Facies/

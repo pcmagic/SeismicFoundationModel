@@ -208,9 +208,18 @@ def is_main_process():
     return get_rank() == 0
 
 
+def create_symlink(source, link_name):
+    if os.path.exists(link_name):
+        os.remove(link_name)
+    os.symlink(source, link_name)
+
+
 def save_on_master(*args, **kwargs):
     if is_main_process():
         torch.save(*args, **kwargs)
+        checkpoint_path = args[1]
+        symlink_path = checkpoint_path.parent / 'checkpoint-last.pth'
+        create_symlink(checkpoint_path, symlink_path)
 
 
 def init_distributed_mode(args):
@@ -254,15 +263,17 @@ class NativeScalerWithGradNormCount:
 
     def __init__(self):
         self._scaler = torch.cuda.amp.GradScaler()
-        
+
     def check_grad_strides(self, parameters):
         for param in parameters:
             if param.requires_grad:
                 grad = param.grad
                 if grad is not None:
                     print()
-                    print(f"Param sizes: {param.size()}, strides: {param.stride()}")
-                    print(f"Grad sizes: {grad.size()}, strides: {grad.stride()}")
+                    print(
+                        f"Param sizes: {param.size()}, strides: {param.stride()}")
+                    print(
+                        f"Grad sizes: {grad.size()}, strides: {grad.stride()}")
                     print()
 
     def __call__(self, loss, optimizer, clip_grad=None, parameters=None, create_graph=False, update_grad=True):

@@ -16,8 +16,8 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 import util.misc as misc
 import timm.optim.optim_factory as optim_factory
 from util.datasets import *
-import torchvision.datasets as datasets
-import torchvision.transforms as transforms
+# import torchvision.datasets as datasets
+# import torchvision.transforms as transforms
 from torch.utils.tensorboard import SummaryWriter
 import torch.backends.cudnn as cudnn
 import torch
@@ -28,7 +28,6 @@ import numpy as np
 import time
 from pathlib import Path
 import os
-import torch.nn as nn
 
 # Todo: CUDA_VISIBLE_DEVICES
 # os.environ["CUDA_VISIBLE_DEVICES"] = '0,1'
@@ -122,6 +121,7 @@ def main(args):
     np.random.seed(seed)
 
     cudnn.benchmark = True
+    # dataset_train = SeismicSet(args.data_path, args.input_size)
     dataset_train = SeismicSet_singleFile(args.data_path, args.input_size)
 
     if True:  # args.distributed:
@@ -163,14 +163,15 @@ def main(args):
     print("actual lr: %.2e" % args.lr)
     print("accumulate grad iterations: %d" % args.accum_iter)
     print("effective batch size: %d" % eff_batch_size)
-    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total_params = sum(p.numel()
+                       for p in model.parameters() if p.requires_grad)
     print(f"Total number of trainable parameters: {format(total_params, ',')}")
     # # 打印每个模块的名字和参数量
     # for name, module in model.named_modules():
-    #     if isinstance(module, nn.Module):
+    #     if isinstance(module, torch.nn.Module):
     #         params = sum(p.numel() for p in module.parameters() if p.requires_grad)
     #         print(f"Module: {name}, Parameters: {format(total_params, ',')}")
-        
+
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
             # model, device_ids=[args.gpu], find_unused_parameters=True)
@@ -202,6 +203,7 @@ def main(args):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
+            print('save_model at epoch %d' % epoch)
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                      'epoch': epoch, }
