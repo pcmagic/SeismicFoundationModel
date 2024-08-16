@@ -23,7 +23,9 @@ SFM_Pretrain/output_dir/
 SFM-Finetune/Application/Facies/
 SFM-Pretrain/output_dir/
 output_dir/
+ossutil_output/
 Model*
+*.sgy
 
 # build artifacts
 .eggs/

@@ -123,6 +123,7 @@ def main(args):
     cudnn.benchmark = True
     # dataset_train = SeismicSet(args.data_path, args.input_size)
     dataset_train = SeismicSet_singleFile(args.data_path, args.input_size)
+    # dataset_train = SeismicSet_loadOnce(args.data_path, args.input_size)
 
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()

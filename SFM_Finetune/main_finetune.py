@@ -119,8 +119,8 @@ def get_args_parser():
                         help='finetune from checkpoint')
     parser.add_argument('--modelComparsion', default='',
                         help='Deeplab or Unet')
-    parser.add_argument('--task', type=str, default='SEAM',
-                        help='SEAM or Salt or Denoise or Interpolation or Reflection')
+    parser.add_argument('--task', type=str, default='Facies',
+                        help='Facies or Salt or Denoise or Interpolation or Reflection')
     parser.add_argument('--global_pool', action='store_true')
     parser.set_defaults(global_pool=False)
     parser.add_argument('--cls_token', action='store_false', dest='global_pool',
@@ -182,7 +182,7 @@ def main(args):
 
     # dataset_train = build_dataset(is_train=True, args=args)
     # dataset_val = build_dataset(is_train=False, args=args)
-    if args.task == 'SEAM':
+    if args.task == 'Facies':
         dataset_train = FacesSet(args.data_path, is_train=True)
         dataset_val = FacesSet(args.data_path, is_train=False)
         args.nb_classes = 6
@@ -278,12 +278,12 @@ def main(args):
                 in_chans=1,
                 Interpolation=(args.task == 'Interpolation')
             )
-        elif args.task in ['SEAM', 'Salt']:
+        elif args.task in ['Facies', 'Salt']:
             model = models_Segmentation.__dict__[args.model](
-                in_chans=1,
                 img_size=args.input_size,
                 num_classes=args.nb_classes,
                 drop_path_rate=args.drop_path,
+                in_chans=1,
             )
 
     if args.finetune and not args.eval:
@@ -364,7 +364,7 @@ def main(args):
 
     if args.task in ['Denoise', 'Interpolation', 'Reflection']:
         criterion = forward_loss
-    elif args.task in ['SEAM', 'Salt']:
+    elif args.task in ['Facies', 'Salt']:
         criterion = torch.nn.CrossEntropyLoss()
     print("criterion = %s" % str(criterion))
 
@@ -395,7 +395,7 @@ def main(args):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
-        if args.task in ['SEAM', 'Salt']:
+        if args.task in ['Facies', 'Salt']:
             test_stats = evaluate(data_loader_val, model, device)
             print(
                 f"Accuracy of the network on the {len(dataset_val)} test images: {test_stats['acc']:.1f}%")

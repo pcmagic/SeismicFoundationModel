@@ -8,23 +8,26 @@
 # DeiT: https://github.com/facebookresearch/deit
 # --------------------------------------------------------
 
+from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+from timm.data import create_transform
+from torchvision import datasets, transforms
 import os
 import PIL
 
-import os, random
+import os
+import random
+import multiprocessing
+import ctypes
 
 # import glob
 import numpy as np
 import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
+import torch.distributed as dist
 
+import util.misc as misc
 random.seed(42)
-
-from torchvision import datasets, transforms
-
-from timm.data import create_transform
-from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
 
 def build_dataset(is_train, args):
@@ -77,7 +80,7 @@ def build_transform(is_train, args):
     return transforms.Compose(t)
 
 
-## pretrain
+# pretrain
 class SeismicSet(data.Dataset):
     def __init__(self, path, input_size) -> None:
         super().__init__()
@@ -101,12 +104,13 @@ class SeismicSet(data.Dataset):
             d = (d - d.mean()) / (d.std() + 1e-6)
         return d
 
+
 class SeismicSet_singleFile(data.Dataset):
     def __init__(self, path, input_size) -> None:
         super().__init__()
         self.input_size = input_size
         self.dat_path = path
-        self.read_len = input_size * input_size * np.single().itemsize 
+        self.read_len = input_size * input_size * np.single().itemsize
         with open(self.dat_path, 'rb') as binary_file:
             binary_file.seek(0, 2)
             file_length = binary_file.tell()
@@ -122,11 +126,58 @@ class SeismicSet_singleFile(data.Dataset):
 
     def __getitem__(self, index):
         self.fopen.seek(self.read_len * self.shuffle_idx[index])
-        chunk = self.fopen.read(self.read_len)  
-        d = np.frombuffer(chunk, dtype=np.single()).reshape(1, self.input_size, self.input_size)
+        chunk = self.fopen.read(self.read_len)
+        d = np.frombuffer(chunk, dtype=np.single()).reshape(
+            1, self.input_size, self.input_size)
         d = (d - d.mean()) / (d.std() + 1e-6)
         return d, torch.tensor([1])
-    
+
+
+class SeismicSet_loadOnce(data.Dataset):
+    def __init__(self, path, input_size) -> None:
+        super().__init__()
+        self.input_size = input_size
+        self.dat_path = path
+        self.read_len = input_size * input_size * np.single().itemsize
+
+        # if not hasattr(self, 'data') or self.data is None:
+        if misc.get_rank() == 0:
+            self._load_data_to_shared_memory()
+
+        dist.barrier()  # Synchronize all processes
+        if SeismicSet_loadOnce.shared_array_base is None:
+            # Access the shared memory array
+            self.data = np.frombuffer(SeismicSet_loadOnce.shared_array_base.get_obj(
+            ), dtype=np.single).reshape(self.img_count, 1, self.input_size, self.input_size)
+
+        self.shuffle_idx = np.arange(self.img_count)
+        random.shuffle(self.shuffle_idx)
+        print("len(self.file_list)", self.img_count)
+
+    def _load_data_to_shared_memory(self):
+        # Load data into shared memory
+        with open(self.dat_path, 'rb') as binary_file:
+            binary_file.seek(0, 2)
+            file_length = binary_file.tell()
+            assert file_length % self.read_len == 0, f"The file length is not divisible by read_len"
+            self.img_count = int(file_length / self.read_len)
+            binary_file.seek(0)
+            data = np.frombuffer(binary_file.read(), dtype=np.single).reshape(
+                self.img_count, 1, self.input_size, self.input_size)
+
+        # Create shared memory array
+        self.shared_array_base = multiprocessing.Array(
+            ctypes.c_float, data.flatten(), lock=False)
+        self.data = np.frombuffer(self.shared_array_base, dtype=np.single).reshape(
+            self.img_count, 1, self.input_size, self.input_size)
+
+    def __len__(self) -> int:
+        return self.img_count
+
+    def __getitem__(self, index):
+        data = self.data[self.shuffle_idx[index]]
+        data = (data - data.mean()) / (data.std() + 1e-6)
+        return data, torch.tensor([1])
 
 
 def to_transforms(d, input_size):
@@ -142,7 +193,7 @@ def to_transforms(d, input_size):
     return t(d)
 
 
-### fintune
+# fintune
 class FacesSet(data.Dataset):
     # folder/train/data/**.dat, folder/train/label/**.dat
     # folder/test/data/**.dat, folder/test/label/**.dat
@@ -151,19 +202,27 @@ class FacesSet(data.Dataset):
         self.shape = shape
 
         # self.data_list = sorted(glob.glob(folder + 'seismic/*.dat'))
-        self.data_list = [folder + "seismic/" + str(f) + ".dat" for f in range(117)]
+        self.data_list = [folder + "seismic/" +
+                          str(f) + ".dat" for f in range(117)]
 
         n = len(self.data_list)
         if is_train:
             self.data_list = self.data_list[:100]
         elif not is_train:
             self.data_list = self.data_list[100:]
-        self.label_list = [f.replace("/seismic/", "/label/") for f in self.data_list]
+        self.label_list = []
+        replace_str, new_str = "seismic", 'label'
+        for f in self.data_list:
+            last_seismic_index = f.rfind(replace_str)
+            self.label_list.append(f[:last_seismic_index] +
+                                    new_str +
+                                    f[last_seismic_index + len(replace_str):])
 
     def __getitem__(self, index):
         d = np.fromfile(self.data_list[index], np.float32)
         d = d.reshape([1] + self.shape)
-        l = np.fromfile(self.label_list[index], np.float32).reshape(self.shape) - 1
+        l = np.fromfile(self.label_list[index],
+                        np.float32).reshape(self.shape) - 1
         l = l.astype(int)
         return torch.tensor(d), torch.tensor(l)
 
@@ -176,13 +235,20 @@ class SaltSet(data.Dataset):
     def __init__(self, folder, shape=[224, 224], is_train=True) -> None:
         super().__init__()
         self.shape = shape
-        self.data_list = [folder + "seismic/" + str(f) + ".dat" for f in range(4000)]
+        self.data_list = [folder + "seismic/" +
+                          str(f) + ".dat" for f in range(4000)]
         n = len(self.data_list)
         if is_train:
             self.data_list = self.data_list[:3500]
         elif not is_train:
             self.data_list = self.data_list[3500:]
-        self.label_list = [f.replace("/seismic/", "/label/") for f in self.data_list]
+        self.label_list = []
+        replace_str, new_str = "seismic", 'label'
+        for f in self.data_list:
+            last_seismic_index = f.rfind(replace_str)
+            self.label_list.append(f[:last_seismic_index] +
+                                    new_str +
+                                    f[last_seismic_index + len(replace_str):])
 
     def __getitem__(self, index):
         d = np.fromfile(self.data_list[index], np.float32)
@@ -207,7 +273,7 @@ class InterpolationSet(data.Dataset):
             self.data_list = self.data_list
         elif not is_train:
             self.data_list = [
-                folder + "U" + +str(f) + ".dat" for f in range(2000, 4000)
+                folder + "U" +str(f) + ".dat" for f in range(2000, 4000)
             ]
         self.label_list = self.data_list
 
@@ -225,15 +291,22 @@ class DenoiseSet(data.Dataset):
     def __init__(self, folder, shape=[224, 224], is_train=True) -> None:
         super().__init__()
         self.shape = shape
-        self.data_list = [folder + "seismic/" + str(f) + ".dat" for f in range(2000)]
+        data_range = 2000
+        self.data_list = [folder + "seismic/" +
+                          str(f) + ".dat" for f in range(data_range)]
         n = len(self.data_list)
         if is_train:
             self.data_list = self.data_list
-            self.label_list = [
-                f.replace("/seismic/", "/label/") for f in self.data_list
-            ]
+            self.label_list = []
+            replace_str, new_str = "seismic", 'label'
+            for f in self.data_list:
+                last_seismic_index = f.rfind(replace_str)
+                self.label_list.append(f[:last_seismic_index] +
+                                        new_str +
+                                        f[last_seismic_index + len(replace_str):])
         elif not is_train:
-            self.data_list = [folder + "field/" + str(f) + ".dat" for f in range(4000)]
+            self.data_list = [folder + "field/" +
+                              str(f) + ".dat" for f in range(4000)]
             self.label_list = self.data_list
 
     def __getitem__(self, index):
@@ -255,14 +328,19 @@ class ReflectSet(data.Dataset):
     def __init__(self, folder, shape=[224, 224], is_train=True) -> None:
         super().__init__()
         self.shape = shape
-        self.data_list = [folder + "seismic/" + str(f) + ".dat" for f in range(2200)]
+        self.data_list = [folder + "seismic/" +
+                          str(f) + ".dat" for f in range(2200)]
 
         n = len(self.data_list)
         if is_train:
             self.data_list = self.data_list
-            self.label_list = [
-                f.replace("/seismic/", "/label/") for f in self.data_list
-            ]
+            self.label_list = []
+            replace_str, new_str = "seismic", 'label'
+            for f in self.data_list:
+                last_seismic_index = f.rfind(replace_str)
+                self.label_list.append(f[:last_seismic_index] +
+                                        new_str +
+                                        f[last_seismic_index + len(replace_str):])
         elif not is_train:
             self.data_list = [
                 folder + "SEAMseismic/" + str(f) + ".dat" for f in range(4000)
